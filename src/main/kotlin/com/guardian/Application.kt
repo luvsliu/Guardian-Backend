@@ -67,25 +67,31 @@ fun main() {
             // --- RUTAS DE AUTENTICACIÓN ---
             post("/registro") {
                 try {
-                    val user = call.receive<User>()
+                    val params = call.receive<Map<String, String>>()
+                    val emailParam = params["email"] ?: throw Exception("Email no proporcionado")
+                    val passwordParam = params["password"] ?: throw Exception("Password no proporcionado")
+
                     DatabaseFactory.dbQuery {
                         UsuariosTable.insert {
-                            it[email] = user.email
-                            it[password] = user.password
+                            it[email] = emailParam
+                            it[password] = passwordParam
                         }
                     }
                     call.respond(HttpStatusCode.Created, mapOf("status" to "success", "message" to "Usuario registrado"))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Ya existe un usuario con este email")))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error en el registro")))
                 }
             }
 
             post("/login") {
                 try {
-                    val credentials = call.receive<User>()
+                    val params = call.receive<Map<String, String>>()
+                    val emailParam = params["email"] ?: throw Exception("Email no proporcionado")
+                    val passwordParam = params["password"] ?: throw Exception("Password no proporcionado")
+
                     val user = DatabaseFactory.dbQuery {
                         UsuariosTable.select { 
-                            (UsuariosTable.email eq credentials.email) and (UsuariosTable.password eq credentials.password) 
+                            (UsuariosTable.email eq emailParam) and (UsuariosTable.password eq passwordParam)
                         }.singleOrNull()
                     }
 
