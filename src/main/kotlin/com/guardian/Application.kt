@@ -2,7 +2,6 @@ package com.guardian
 
 import com.guardian.database.DatabaseFactory
 import com.guardian.database.ContactosTable
-import com.guardian.model.EmergencyContact
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -43,14 +42,18 @@ fun main() {
 
             post("/index.php") {
                 try {
-                    val contacto = call.receive<EmergencyContact>()
-                    logger.info("Received request to save contact: ${contacto.nombre}")
+                    val params = call.receive<Map<String, String>>()
+                    val nombre = params["nombre"] ?: ""
+                    val numero = params["numero"] ?: ""
+                    val parentesco = params["parentesco"] ?: ""
+
+                    logger.info("Received request to save contact: $nombre")
 
                     DatabaseFactory.dbQuery {
                         ContactosTable.insert {
-                            it[nombre] = contacto.nombre
-                            it[numero] = contacto.numero
-                            it[parentesco] = contacto.parentesco
+                            it[ContactosTable.nombre] = nombre
+                            it[ContactosTable.numero] = numero
+                            it[ContactosTable.parentesco] = parentesco
                         }
                     }
 
