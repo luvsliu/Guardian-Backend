@@ -75,12 +75,12 @@ fun main() {
                 try {
                     val params = call.receive<Map<String, String>>()
                     val emailParam = params["email"] ?: throw Exception("Email requerido")
-                    val passwordParam = params["password"] ?: throw Exception("Password requerido")
+                    val passwordParam = params["password"] ?: params["contraseña"] ?: throw Exception("Password requerido")
 
                     DatabaseFactory.dbQuery {
                         UsuariosTable.insert {
                             it[email] = emailParam
-                            it[password] = passwordParam
+                            it[contraseña] = passwordParam
                         }
                     }
                     call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
@@ -93,11 +93,11 @@ fun main() {
                 try {
                     val params = call.receive<Map<String, String>>()
                     val emailParam = params["email"] ?: ""
-                    val passwordParam = params["password"] ?: ""
+                    val passwordParam = params["password"] ?: params["contraseña"] ?: ""
 
                     val userExists = DatabaseFactory.dbQuery {
                         UsuariosTable.select { 
-                            (UsuariosTable.email eq emailParam) and (UsuariosTable.password eq passwordParam) 
+                            (UsuariosTable.email eq emailParam) and (UsuariosTable.contraseña eq passwordParam)
                         }.count() > 0
                     }
 

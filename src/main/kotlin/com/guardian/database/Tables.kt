@@ -14,7 +14,7 @@ object ContactosTable : Table("contactos") {
 object UsuariosTable : Table("usuarios") {
     val id = integer("id").autoIncrement()
     val email = varchar("email", 255).uniqueIndex()
-    val password = varchar("password", 255)
+    val contraseña = varchar("contraseña", 255)
 
     override val primaryKey = PrimaryKey(id)
 }
