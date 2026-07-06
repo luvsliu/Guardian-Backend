@@ -31,10 +31,11 @@ tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     // Incluimos las dependencias para crear un Fat JAR
-    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }) {
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    }
 
-    // CRÍTICO: Excluir archivos de firma que causan SecurityException
-    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    with(tasks.processResources.get())
 }
 
 dependencies {
