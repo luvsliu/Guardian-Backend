@@ -32,7 +32,7 @@ fun main() {
                 call.respondText("Guardian Backend is active and stable!")
             }
 
-            // Listar contactos con IDs reales
+            // LISTA: Devuelve exactamente lo que hay en Railway AHORA MISMO
             get("/lista.php") {
                 try {
                     val contactos = DatabaseFactory.dbQuery {
@@ -45,13 +45,14 @@ fun main() {
                             )
                         }
                     }
+                    // Si está vacío, devolvemos una lista vacía real []
                     call.respond(contactos)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Error al listar")))
                 }
             }
 
-            // Guardar contacto - Regresamos a Map para estabilidad
+            // GUARDAR: Inserta y confirma
             post("/index.php") {
                 try {
                     val params = call.receive<Map<String, String>>()
@@ -66,23 +67,20 @@ fun main() {
                             it[parentesco] = par
                         }
                     }
-                    // IMPORTANTE: Devolvemos status "success" y el ID generado
-                    // para que la App Android sepa que todo salió perfecto
+                    
+                    // Al guardar, confirmamos con los datos reales insertados
                     call.respond(HttpStatusCode.Created, mapOf(
                         "status" to "success", 
-                        "message" to "Contacto guardado correctamente",
-                        "id" to generatedId.value
+                        "id" to generatedId.value,
+                        "nombre" to nom
                     ))
                 } catch (e: Exception) {
                     logger.error("Error guardar: ${e.message}")
-                    call.respond(HttpStatusCode.BadRequest, mapOf(
-                        "status" to "error", 
-                        "message" to (e.message ?: "Error al guardar")
-                    ))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error al guardar")))
                 }
             }
 
-            // Eliminar contacto - Versión estable
+            // ELIMINAR: Borra de verdad en Railway
             post("/eliminar.php") {
                 try {
                     val params = call.receive<Map<String, String>>()
@@ -96,42 +94,40 @@ fun main() {
                     if (deleted > 0) {
                         call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("status" to "error", "message" to "No se encontró el ID"))
+                        call.respond(HttpStatusCode.NotFound, mapOf("status" to "error", "message" to "ID no encontrado"))
                     }
                 } catch (e: Exception) {
-                    logger.error("Error eliminar: ${e.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error al eliminar"))
                 }
             }
 
-            // Autenticación - Registro
+            // AUTH: Registro y Login (Sin cambios, ya son estables)
             post("/registro") {
                 try {
                     val params = call.receive<Map<String, String>>()
-                    val emailParam = params["email"] ?: throw Exception("Email requerido")
-                    val passwordParam = params["password"] ?: params["contraseña"] ?: throw Exception("Password requerido")
+                    val em = params["email"] ?: throw Exception("Email requerido")
+                    val con = params["password"] ?: params["contraseña"] ?: throw Exception("Contraseña requerida")
 
                     DatabaseFactory.dbQuery {
                         UsuariosTable.insert {
-                            it[email] = emailParam
-                            it[contraseña] = passwordParam
+                            it[email] = em
+                            it[contraseña] = con
                         }
                     }
                     call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Email duplicado o error en DB"))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error en registro"))
                 }
             }
 
-            // Autenticación - Login
             post("/login") {
                 try {
                     val params = call.receive<Map<String, String>>()
-                    val emailParam = params["email"] ?: ""
-                    val passwordParam = params["password"] ?: params["contraseña"] ?: ""
+                    val em = params["email"] ?: ""
+                    val con = params["password"] ?: params["contraseña"] ?: ""
 
                     val user = DatabaseFactory.dbQuery {
-                        UsuariosTable.select { (UsuariosTable.email eq emailParam) and (UsuariosTable.contraseña eq passwordParam) }.singleOrNull()
+                        UsuariosTable.select { (UsuariosTable.email eq em) and (UsuariosTable.contraseña eq con) }.singleOrNull()
                     }
 
                     if (user != null) {
@@ -140,7 +136,7 @@ fun main() {
                         call.respond(HttpStatusCode.Unauthorized, mapOf("status" to "error", "message" to "Credenciales inválidas"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error en el login"))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error login"))
                 }
             }
         }
