@@ -54,27 +54,50 @@ fun main() {
                 }
             }
 
+            // NUEVA RUTA: Listar contactos para ver IDs reales
+            get("/lista.php") {
+                try {
+                    val contactos = DatabaseFactory.dbQuery {
+                        ContactosTable.selectAll().map {
+                            mapOf(
+                                "id" to it[ContactosTable.id],
+                                "nombre" to it[ContactosTable.nombre],
+                                "numero" to it[ContactosTable.numero],
+                                "parentesco" to it[ContactosTable.parentesco]
+                            )
+                        }
+                    }
+                    call.respond(contactos)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Error al listar")))
+                }
+            }
+
             post("/eliminar.php") {
                 val logger = LoggerFactory.getLogger("Eliminar")
                 try {
-                    val params = call.receive<Map<String, String>>()
-                    logger.info("Intento de eliminación con parámetros: $params")
+                    // Intentamos recibir como Map primero
+                    val bodyText = call.receiveText()
+                    logger.info("Cuerpo recibido en eliminar: $bodyText")
                     
-                    // Buscamos el ID en varios formatos posibles por si la App varía
-                    val idStr = params["id"] ?: params["ID"] ?: params["contactId"] 
-                        ?: throw Exception("ID no encontrado en el JSON. Recibido: $params")
-                    
-                    val idAEliminar = idStr.toIntOrNull() 
-                        ?: throw Exception("El ID '$idStr' no es un número válido")
-
-                    val rowsDeleted = DatabaseFactory.dbQuery {
-                        ContactosTable.deleteWhere { ContactosTable.id eq idAEliminar }
+                    // Extraer ID manualmente de un JSON simple si falla el Map
+                    val idStr = if (bodyText.contains("\"id\":")) {
+                        bodyText.substringAfter("\"id\":").substringBefore(",").substringBefore("}").trim().replace("\"", "").replace(":", "")
+                    } else {
+                        // Si no es JSON manual, intentamos parsear de nuevo
+                        ""
                     }
                     
-                    logger.info("Filas eliminadas: $rowsDeleted")
+                    val idFinal = idStr.toIntOrNull() ?: throw Exception("No se pudo obtener un ID numérico de: $bodyText")
+
+                    val rowsDeleted = DatabaseFactory.dbQuery {
+                        ContactosTable.deleteWhere { ContactosTable.id eq idFinal }
+                    }
+                    
+                    logger.info("ID a eliminar: $idFinal. Filas borradas: $rowsDeleted")
                     call.respond(HttpStatusCode.OK, mapOf("status" to "success", "deletedRows" to rowsDeleted))
                 } catch (e: Exception) {
-                    logger.error("Error al eliminar: ${e.message}")
+                    logger.error("Fallo total al eliminar: ${e.message}")
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("status" to "error", "message" to (e.message ?: "Error desconocido"))
