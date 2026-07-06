@@ -3,7 +3,6 @@ package com.guardian
 import com.guardian.database.DatabaseFactory
 import com.guardian.database.ContactosTable
 import com.guardian.database.UsuariosTable
-import com.guardian.model.EmergencyContact
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -55,92 +54,89 @@ fun main() {
             // Guardar contacto
             post("/index.php") {
                 try {
-                    val params = call.receive<Map<String, String>>()
-                    val nom = params["nombre"] ?: ""
-                    val num = params["numero"] ?: ""
-                    val par = params["parentesco"] ?: ""
+                    // Recibir como texto para máxima flexibilidad
+                    val body = call.receiveText()
+                    logger.info("Guardar - Body: $body")
+                    
+                    // Extraer datos de forma manual para evitar fallos de parseo
+                    val nombre = if (body.contains("\"nombre\"")) body.substringAfter("\"nombre\"").substringAfter("\"").substringBefore("\"") else ""
+                    val numero = if (body.contains("\"numero\"")) body.substringAfter("\"numero\"").substringAfter("\"").substringBefore("\"") else ""
+                    val parentesco = if (body.contains("\"parentesco\"")) body.substringAfter("\"parentesco\"").substringAfter("\"").substringBefore("\"") else ""
 
                     val generatedId = DatabaseFactory.dbQuery {
                         ContactosTable.insertAndGetId {
-                            it[nombre] = nom
-                            it[numero] = num
-                            it[parentesco] = par
+                            it[ContactosTable.nombre] = nombre
+                            it[ContactosTable.numero] = numero
+                            it[ContactosTable.parentesco] = parentesco
                         }
                     }
                     call.respond(HttpStatusCode.Created, mapOf("status" to "success", "id" to generatedId.value))
                 } catch (e: Exception) {
+                    logger.error("Error guardar: ${e.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error al guardar")))
                 }
             }
 
-            // Eliminar contacto
+            // Eliminar contacto - VERSIÓN ULTRA ROBUSTA
             post("/eliminar.php") {
-                val logger = LoggerFactory.getLogger("Eliminar")
                 try {
-                    val bodyText = call.receiveText()
-                    logger.info("CONTENIDO BRUTO RECIBIDO: '$bodyText'")
+                    val bodyText = call.receiveText().trim()
+                    logger.info("ELIMINAR - Body: '$bodyText'")
                     
-                    // 1. Intentamos extraer el ID si viene como JSON {"id": 123} o {"id": "123"}
-                    var idStr = ""
-                    if (bodyText.contains("\"id\"")) {
-                        idStr = bodyText.substringAfter("\"id\"")
-                            .substringAfter(":")
-                            .substringBefore(",")
-                            .substringBefore("}")
-                            .replace("\"", "")
-                            .trim()
-                    } else {
-                        // 2. Si no es JSON, tomamos el texto tal cual (por si viene solo el número)
-                        idStr = bodyText.trim()
-                    }
+                    // Extraer ID buscando el número en el texto
+                    val idStr = bodyText.filter { it.isDigit() }
                     
-                    logger.info("ID EXTRAIDO: '$idStr'")
-                    val idFinal = idStr.toIntOrNull() ?: throw Exception("El texto '$idStr' no es un ID válido")
+                    if (idStr.isEmpty()) throw Exception("No se encontró un ID numérico en el envío")
+                    
+                    val idFinal = idStr.toInt()
 
                     val deleted = DatabaseFactory.dbQuery {
                         ContactosTable.deleteWhere { ContactosTable.id eq idFinal }
                     }
                     
                     if (deleted > 0) {
-                        logger.info("EXITO: Se eliminó el contacto con ID $idFinal")
-                        call.respond(HttpStatusCode.OK, mapOf("status" to "success", "message" to "Borrado: $idFinal"))
+                        logger.info("Eliminado exitosamente ID: $idFinal")
+                        call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
                     } else {
-                        logger.warn("AVISO: No se encontró nada con ID $idFinal")
-                        call.respond(HttpStatusCode.NotFound, mapOf("status" to "error", "message" to "No existe el ID $idFinal"))
+                        logger.warn("No se encontró el ID: $idFinal")
+                        call.respond(HttpStatusCode.NotFound, mapOf("status" to "error", "message" to "ID $idFinal no existe"))
                     }
                 } catch (e: Exception) {
-                    logger.error("FALLO CRITICO: ${e.message}")
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error fatal")))
+                    logger.error("Error eliminar: ${e.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error en el servidor al eliminar"))
                 }
             }
 
-            // Autenticación
+            // Autenticación - Registro
             post("/registro") {
                 try {
-                    val params = call.receive<Map<String, String>>()
-                    val em = params["email"] ?: throw Exception("Email requerido")
-                    val con = params["password"] ?: params["contraseña"] ?: throw Exception("Contraseña requerida")
+                    val body = call.receiveText()
+                    val email = if (body.contains("\"email\"")) body.substringAfter("\"email\"").substringAfter("\"").substringBefore("\"") else ""
+                    val pass = if (body.contains("\"password\"")) body.substringAfter("\"password\"").substringAfter("\"").substringBefore("\"") 
+                               else if (body.contains("\"contraseña\"")) body.substringAfter("\"contraseña\"").substringAfter("\"").substringBefore("\"") else ""
 
                     DatabaseFactory.dbQuery {
                         UsuariosTable.insert {
-                            it[email] = em
-                            it[contraseña] = con
+                            it[UsuariosTable.email] = email
+                            it[UsuariosTable.contraseña] = pass
                         }
                     }
                     call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Email duplicado o error en DB"))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error: Email duplicado o datos inválidos"))
                 }
             }
 
+            // Autenticación - Login
             post("/login") {
                 try {
-                    val params = call.receive<Map<String, String>>()
-                    val em = params["email"] ?: ""
-                    val con = params["password"] ?: params["contraseña"] ?: ""
+                    val body = call.receiveText()
+                    val email = if (body.contains("\"email\"")) body.substringAfter("\"email\"").substringAfter("\"").substringBefore("\"") else ""
+                    val pass = if (body.contains("\"password\"")) body.substringAfter("\"password\"").substringAfter("\"").substringBefore("\"") 
+                               else if (body.contains("\"contraseña\"")) body.substringAfter("\"contraseña\"").substringAfter("\"").substringBefore("\"") else ""
 
                     val user = DatabaseFactory.dbQuery {
-                        UsuariosTable.select { (UsuariosTable.email eq em) and (UsuariosTable.contraseña eq con) }.singleOrNull()
+                        UsuariosTable.select { (UsuariosTable.email eq email) and (UsuariosTable.contraseña eq pass) }.singleOrNull()
                     }
 
                     if (user != null) {
