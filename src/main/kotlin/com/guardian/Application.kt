@@ -3,6 +3,7 @@ package com.guardian
 import com.guardian.database.DatabaseFactory
 import com.guardian.database.ContactosTable
 import com.guardian.database.UsuariosTable
+import com.guardian.model.EmergencyContact
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -32,35 +33,13 @@ fun main() {
                 call.respondText("Guardian Backend is active and stable!")
             }
 
-            // --- SECCIÓN DE CONTACTOS (index.php y eliminar.php) ---
-            
-            post("/index.php") {
-                try {
-                    val params = call.receive<Map<String, String>>()
-                    val nombreParam = params["nombre"] ?: ""
-                    val numeroParam = params["numero"] ?: ""
-                    val parentescoParam = params["parentesco"] ?: ""
-
-                    DatabaseFactory.dbQuery {
-                        ContactosTable.insert {
-                            it[nombre] = nombreParam
-                            it[numero] = numeroParam
-                            it[parentesco] = parentescoParam
-                        }
-                    }
-                    call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Unknown error")))
-                }
-            }
-
-            // NUEVA RUTA: Listar contactos para ver IDs reales
+            // Listar contactos con IDs reales
             get("/lista.php") {
                 try {
                     val contactos = DatabaseFactory.dbQuery {
                         ContactosTable.selectAll().map {
                             mapOf(
-                                "id" to it[ContactosTable.id],
+                                "id" to it[ContactosTable.id].value,
                                 "nombre" to it[ContactosTable.nombre],
                                 "numero" to it[ContactosTable.numero],
                                 "parentesco" to it[ContactosTable.parentesco]
@@ -73,77 +52,90 @@ fun main() {
                 }
             }
 
-            post("/eliminar.php") {
-                val logger = LoggerFactory.getLogger("Eliminar")
+            // Guardar contacto
+            post("/index.php") {
                 try {
-                    // Intentamos recibir como Map primero
-                    val bodyText = call.receiveText()
-                    logger.info("Cuerpo recibido en eliminar: $bodyText")
-                    
-                    // Extraer ID manualmente de un JSON simple si falla el Map
-                    val idStr = if (bodyText.contains("\"id\":")) {
-                        bodyText.substringAfter("\"id\":").substringBefore(",").substringBefore("}").trim().replace("\"", "").replace(":", "")
-                    } else {
-                        // Si no es JSON manual, intentamos parsear de nuevo
-                        ""
-                    }
-                    
-                    val idFinal = idStr.toIntOrNull() ?: throw Exception("No se pudo obtener un ID numérico de: $bodyText")
+                    val params = call.receive<Map<String, String>>()
+                    val nom = params["nombre"] ?: ""
+                    val num = params["numero"] ?: ""
+                    val par = params["parentesco"] ?: ""
 
-                    val rowsDeleted = DatabaseFactory.dbQuery {
-                        ContactosTable.deleteWhere { ContactosTable.id eq idFinal }
+                    val generatedId = DatabaseFactory.dbQuery {
+                        ContactosTable.insertAndGetId {
+                            it[nombre] = nom
+                            it[numero] = num
+                            it[parentesco] = par
+                        }
                     }
-                    
-                    logger.info("ID a eliminar: $idFinal. Filas borradas: $rowsDeleted")
-                    call.respond(HttpStatusCode.OK, mapOf("status" to "success", "deletedRows" to rowsDeleted))
+                    call.respond(HttpStatusCode.Created, mapOf("status" to "success", "id" to generatedId.value))
                 } catch (e: Exception) {
-                    logger.error("Fallo total al eliminar: ${e.message}")
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("status" to "error", "message" to (e.message ?: "Error desconocido"))
-                    )
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error al guardar")))
                 }
             }
 
-            // --- SECCIÓN DE AUTENTICACIÓN (registro y login) ---
+            // Eliminar contacto
+            post("/eliminar.php") {
+                try {
+                    val bodyText = call.receiveText()
+                    // Extraer ID de forma ultra flexible (JSON o Texto plano)
+                    val idStr = if (bodyText.contains("\"id\":")) {
+                        bodyText.substringAfter("\"id\":").substringBefore(",").substringBefore("}").trim().replace("\"", "").replace(":", "")
+                    } else {
+                        bodyText.trim()
+                    }
+                    
+                    val idFinal = idStr.toIntOrNull() ?: throw Exception("ID inválido: $idStr")
 
+                    val deleted = DatabaseFactory.dbQuery {
+                        ContactosTable.deleteWhere { id eq idFinal }
+                    }
+                    
+                    if (deleted > 0) {
+                        call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, mapOf("status" to "error", "message" to "No se encontró el ID $idFinal"))
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error al eliminar")))
+                }
+            }
+
+            // Autenticación
             post("/registro") {
                 try {
                     val params = call.receive<Map<String, String>>()
-                    val emailParam = params["email"] ?: throw Exception("Email requerido")
-                    val passwordParam = params["password"] ?: params["contraseña"] ?: throw Exception("Password requerido")
+                    val em = params["email"] ?: throw Exception("Email requerido")
+                    val con = params["password"] ?: params["contraseña"] ?: throw Exception("Contraseña requerida")
 
                     DatabaseFactory.dbQuery {
                         UsuariosTable.insert {
-                            it[email] = emailParam
-                            it[contraseña] = passwordParam
+                            it[email] = em
+                            it[contraseña] = con
                         }
                     }
                     call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error: Posible email duplicado"))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Email duplicado o error en DB"))
                 }
             }
 
             post("/login") {
                 try {
                     val params = call.receive<Map<String, String>>()
-                    val emailParam = params["email"] ?: ""
-                    val passwordParam = params["password"] ?: params["contraseña"] ?: ""
+                    val em = params["email"] ?: ""
+                    val con = params["password"] ?: params["contraseña"] ?: ""
 
-                    val userExists = DatabaseFactory.dbQuery {
-                        UsuariosTable.select { 
-                            (UsuariosTable.email eq emailParam) and (UsuariosTable.contraseña eq passwordParam)
-                        }.count() > 0
+                    val user = DatabaseFactory.dbQuery {
+                        UsuariosTable.select { (UsuariosTable.email eq em) and (UsuariosTable.contraseña eq con) }.singleOrNull()
                     }
 
-                    if (userExists) {
-                        call.respond(HttpStatusCode.OK, mapOf("status" to "success", "message" to "Login correcto"))
+                    if (user != null) {
+                        call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
                     } else {
                         call.respond(HttpStatusCode.Unauthorized, mapOf("status" to "error", "message" to "Credenciales inválidas"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error en el servidor"))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error en el login"))
                 }
             }
         }
