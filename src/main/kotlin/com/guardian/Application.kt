@@ -66,10 +66,19 @@ fun main() {
                             it[parentesco] = par
                         }
                     }
-                    call.respond(HttpStatusCode.Created, mapOf("status" to "success", "id" to generatedId.value))
+                    // IMPORTANTE: Devolvemos status "success" y el ID generado
+                    // para que la App Android sepa que todo salió perfecto
+                    call.respond(HttpStatusCode.Created, mapOf(
+                        "status" to "success", 
+                        "message" to "Contacto guardado correctamente",
+                        "id" to generatedId.value
+                    ))
                 } catch (e: Exception) {
                     logger.error("Error guardar: ${e.message}")
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error al guardar")))
+                    call.respond(HttpStatusCode.BadRequest, mapOf(
+                        "status" to "error", 
+                        "message" to (e.message ?: "Error al guardar")
+                    ))
                 }
             }
 
