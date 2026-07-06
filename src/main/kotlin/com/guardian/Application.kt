@@ -3,8 +3,6 @@ package com.guardian
 import com.guardian.database.DatabaseFactory
 import com.guardian.database.ContactosTable
 import com.guardian.database.UsuariosTable
-import com.guardian.model.EmergencyContact
-import com.guardian.model.User
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -15,6 +13,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.slf4j.LoggerFactory
 
 fun main() {
@@ -30,18 +29,23 @@ fun main() {
 
         routing {
             get("/") {
-                call.respondText("Guardian Backend is running with Authentication!")
+                call.respondText("Guardian Backend is active and stable!")
             }
 
-            // --- RUTAS DE CONTACTOS ---
+            // --- SECCIÓN DE CONTACTOS (index.php y eliminar.php) ---
+            
             post("/index.php") {
                 try {
-                    val contacto = call.receive<EmergencyContact>()
+                    val params = call.receive<Map<String, String>>()
+                    val nombreParam = params["nombre"] ?: ""
+                    val numeroParam = params["numero"] ?: ""
+                    val parentescoParam = params["parentesco"] ?: ""
+
                     DatabaseFactory.dbQuery {
                         ContactosTable.insert {
-                            it[nombre] = contacto.nombre
-                            it[numero] = contacto.numero
-                            it[parentesco] = contacto.parentesco
+                            it[nombre] = nombreParam
+                            it[numero] = numeroParam
+                            it[parentesco] = parentescoParam
                         }
                     }
                     call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
@@ -53,23 +57,25 @@ fun main() {
             post("/eliminar.php") {
                 try {
                     val params = call.receive<Map<String, String>>()
-                    val idString = params["id"] ?: throw Exception("ID no proporcionado")
-                    val idAEliminar = idString.toIntOrNull() ?: throw Exception("ID debe ser un número")
+                    val idStr = params["id"] ?: throw Exception("ID no proporcionado")
+                    val idAEliminar = idStr.toIntOrNull() ?: throw Exception("ID inválido")
+
                     DatabaseFactory.dbQuery {
                         ContactosTable.deleteWhere { ContactosTable.id eq idAEliminar }
                     }
                     call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Unknown error")))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error al eliminar")))
                 }
             }
 
-            // --- RUTAS DE AUTENTICACIÓN ---
+            // --- SECCIÓN DE AUTENTICACIÓN (registro y login) ---
+
             post("/registro") {
                 try {
                     val params = call.receive<Map<String, String>>()
-                    val emailParam = params["email"] ?: throw Exception("Email no proporcionado")
-                    val passwordParam = params["password"] ?: throw Exception("Password no proporcionado")
+                    val emailParam = params["email"] ?: throw Exception("Email requerido")
+                    val passwordParam = params["password"] ?: throw Exception("Password requerido")
 
                     DatabaseFactory.dbQuery {
                         UsuariosTable.insert {
@@ -77,31 +83,31 @@ fun main() {
                             it[password] = passwordParam
                         }
                     }
-                    call.respond(HttpStatusCode.Created, mapOf("status" to "success", "message" to "Usuario registrado"))
+                    call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error en el registro")))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error: Posible email duplicado"))
                 }
             }
 
             post("/login") {
                 try {
                     val params = call.receive<Map<String, String>>()
-                    val emailParam = params["email"] ?: throw Exception("Email no proporcionado")
-                    val passwordParam = params["password"] ?: throw Exception("Password no proporcionado")
+                    val emailParam = params["email"] ?: ""
+                    val passwordParam = params["password"] ?: ""
 
-                    val user = DatabaseFactory.dbQuery {
+                    val userExists = DatabaseFactory.dbQuery {
                         UsuariosTable.select { 
-                            (UsuariosTable.email eq emailParam) and (UsuariosTable.password eq passwordParam)
-                        }.singleOrNull()
+                            (UsuariosTable.email eq emailParam) and (UsuariosTable.password eq passwordParam) 
+                        }.count() > 0
                     }
 
-                    if (user != null) {
+                    if (userExists) {
                         call.respond(HttpStatusCode.OK, mapOf("status" to "success", "message" to "Login correcto"))
                     } else {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("status" to "error", "message" to "Credenciales incorrectas"))
+                        call.respond(HttpStatusCode.Unauthorized, mapOf("status" to "error", "message" to "Credenciales inválidas"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error en el login")))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error en el servidor"))
                 }
             }
         }
