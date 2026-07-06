@@ -24,7 +24,8 @@ object DatabaseFactory {
         )
 
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(ContactosTable)
+            // Creamos ambas tablas si no existen
+            SchemaUtils.createMissingTablesAndColumns(ContactosTable, UsuariosTable)
         }
     }
 
