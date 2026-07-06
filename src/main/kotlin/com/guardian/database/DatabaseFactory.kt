@@ -1,9 +1,5 @@
 package com.guardian.database
 
-// Asegúrate de importar el objeto de tu tabla si está en otro archivo
-// import com.guardian.database.ContactosTable
-
-import androidx.compose.ui.graphics.colorspace.connect
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
