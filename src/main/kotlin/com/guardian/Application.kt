@@ -31,7 +31,7 @@ fun main() {
             logger.info("Database initialized successfully.")
         } catch (e: Exception) {
             logger.error("Failed to initialize database: ${e.message}", e)
-            // No detenemos el servidor para que al menos Railway no lo marque como CRASHED 
+            // No se detiene el servidor para que al menos Railway no lo marque como CRASHED
             // de inmediato y podamos ver los logs.
         }
 
