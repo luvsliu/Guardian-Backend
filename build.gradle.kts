@@ -1,36 +1,51 @@
 plugins {
-    kotlin("jvm") version "1.9.20"
-    id("io.ktor.plugin") version "2.3.5"
-    id("com.github.johnrengelman.shadow") version "8.1.1"
-    kotlin("plugin.serialization") version "1.9.20"
+    alias(libs.plugins.kotlinJvm)
+    alias(libs.plugins.serialization)
+    application
 }
 
 group = "com.guardian"
 version = "0.0.1"
 
+repositories {
+    mavenCentral()
+    google()
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
 application {
     mainClass.set("com.guardian.ApplicationKt")
 }
 
-repositories {
-    mavenCentral()
+tasks.jar {
+    // Nombre fijo para que Railway lo encuentre siempre
+    archiveFileName.set("app.jar")
+
+    manifest {
+        attributes["Main-Class"] = "com.guardian.ApplicationKt"
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    // Incluimos las dependencias para crear un Fat JAR
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+
+    // CRÍTICO: Excluir archivos de firma que causan SecurityException
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }
 
 dependencies {
-    implementation("io.ktor:ktor-server-core-jvm:2.3.5")
-    implementation("io.ktor:ktor-server-netty-jvm:2.3.5")
-    implementation("io.ktor:ktor-server-content-negotiation-jvm:2.3.5")
-    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:2.3.5")
-    
-    // Database (Exposed + MySQL)
-    implementation("org.jetbrains.exposed:exposed-core:0.44.1")
-    implementation("org.jetbrains.exposed:exposed-dao:0.44.1")
-    implementation("org.jetbrains.exposed:exposed-jdbc:0.44.1")
-    implementation("com.mysql:mysql-connector-j:8.1.0")
-    
-    implementation("ch.qos.logback:logback-classic:1.4.11")
-}
-
-tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
-    archiveFileName.set("server.jar")
+    implementation(libs.logback)
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.netty)
+    implementation(libs.ktor.server.content.negotiation) 
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.dao)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.hikaricp)
+    implementation(libs.mysql.connector)
 }
