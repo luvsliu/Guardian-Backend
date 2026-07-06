@@ -16,17 +16,18 @@ repositories {
 }
 
 dependencies {
-    implementation("io.ktor:ktor-server-core-jvm")
-    implementation("io.ktor:ktor-server-netty-jvm")
-    implementation("io.ktor:ktor-server-content-negotiation-jvm")
-    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm")
+    // Ktor Server
+    implementation("io.ktor:ktor-server-core-jvm:2.3.5")
+    implementation("io.ktor:ktor-server-netty-jvm:2.3.5")
+    implementation("io.ktor:ktor-server-content-negotiation-jvm:2.3.5")
+    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:2.3.5")
     
-    // Base de datos (Exposed + MySQL)
+    // Database (Exposed + MySQL)
     implementation("org.jetbrains.exposed:exposed-core:0.44.1")
     implementation("org.jetbrains.exposed:exposed-dao:0.44.1")
     implementation("org.jetbrains.exposed:exposed-jdbc:0.44.1")
     implementation("com.mysql:mysql-connector-j:8.1.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     
+    // Logging
     implementation("ch.qos.logback:logback-classic:1.4.11")
 }

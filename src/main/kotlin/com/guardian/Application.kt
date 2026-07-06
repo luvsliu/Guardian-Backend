@@ -13,28 +13,38 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.insert
+import org.slf4j.LoggerFactory
 
 fun main() {
-    // IMPORTANTE: host = "0.0.0.0" es obligatorio para que Railway pueda ver el servidor
-    val port = java.lang.System.getenv("PORT")?.toInt() ?: 8080
+    val logger = LoggerFactory.getLogger("Application")
+    val port = System.getenv("PORT")?.toInt() ?: 8080
+    
+    logger.info("Starting server on port $port")
 
     embeddedServer(Netty, port = port, host = "0.0.0.0") {
         install(ContentNegotiation) {
             json()
         }
 
-        DatabaseFactory.init() // Conectamos a MySQL y creamos la tabla si falta
+        try {
+            logger.info("Initializing Database...")
+            DatabaseFactory.init()
+            logger.info("Database initialized successfully.")
+        } catch (e: Exception) {
+            logger.error("Failed to initialize database: ${e.message}", e)
+            // No detenemos el servidor para que al menos Railway no lo marque como CRASHED 
+            // de inmediato y podamos ver los logs.
+        }
 
         routing {
-            // Página de bienvenida al entrar desde el navegador
             get("/") {
-                call.respondText("Guardian Backend is running correctly on Railway!")
+                call.respondText("Guardian Backend is running! Database status: ${try { DatabaseFactory.checkConnection(); "Connected" } catch(e: Exception) { "Error: ${e.message}" }}")
             }
 
-            // Esta es la ruta que llama tu App de Android
             post("/index.php") {
                 try {
                     val contacto = call.receive<EmergencyContact>()
+                    logger.info("Received request to save contact: ${contacto.nombre}")
 
                     DatabaseFactory.dbQuery {
                         ContactosTable.insert {
@@ -46,7 +56,7 @@ fun main() {
 
                     call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
                 } catch (e: Exception) {
-                    // Si algo falla, el servidor te dirá exactamente qué fue
+                    logger.error("Error saving contact: ${e.message}")
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("status" to "error", "message" to (e.message ?: "Unknown error"))
