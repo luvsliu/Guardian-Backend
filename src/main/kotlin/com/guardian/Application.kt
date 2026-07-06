@@ -75,28 +75,42 @@ fun main() {
 
             // Eliminar contacto
             post("/eliminar.php") {
+                val logger = LoggerFactory.getLogger("Eliminar")
                 try {
                     val bodyText = call.receiveText()
-                    // Extraer ID de forma ultra flexible (JSON o Texto plano)
-                    val idStr = if (bodyText.contains("\"id\":")) {
-                        bodyText.substringAfter("\"id\":").substringBefore(",").substringBefore("}").trim().replace("\"", "").replace(":", "")
+                    logger.info("CONTENIDO BRUTO RECIBIDO: '$bodyText'")
+                    
+                    // 1. Intentamos extraer el ID si viene como JSON {"id": 123} o {"id": "123"}
+                    var idStr = ""
+                    if (bodyText.contains("\"id\"")) {
+                        idStr = bodyText.substringAfter("\"id\"")
+                            .substringAfter(":")
+                            .substringBefore(",")
+                            .substringBefore("}")
+                            .replace("\"", "")
+                            .trim()
                     } else {
-                        bodyText.trim()
+                        // 2. Si no es JSON, tomamos el texto tal cual (por si viene solo el número)
+                        idStr = bodyText.trim()
                     }
                     
-                    val idFinal = idStr.toIntOrNull() ?: throw Exception("ID inválido: $idStr")
+                    logger.info("ID EXTRAIDO: '$idStr'")
+                    val idFinal = idStr.toIntOrNull() ?: throw Exception("El texto '$idStr' no es un ID válido")
 
                     val deleted = DatabaseFactory.dbQuery {
-                        ContactosTable.deleteWhere { id eq idFinal }
+                        ContactosTable.deleteWhere { ContactosTable.id eq idFinal }
                     }
                     
                     if (deleted > 0) {
-                        call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
+                        logger.info("EXITO: Se eliminó el contacto con ID $idFinal")
+                        call.respond(HttpStatusCode.OK, mapOf("status" to "success", "message" to "Borrado: $idFinal"))
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("status" to "error", "message" to "No se encontró el ID $idFinal"))
+                        logger.warn("AVISO: No se encontró nada con ID $idFinal")
+                        call.respond(HttpStatusCode.NotFound, mapOf("status" to "error", "message" to "No existe el ID $idFinal"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error al eliminar")))
+                    logger.error("FALLO CRITICO: ${e.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error fatal")))
                 }
             }
 
