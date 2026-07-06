@@ -45,20 +45,21 @@ fun main() {
                             )
                         }
                     }
-                    // Si está vacío, devolvemos una lista vacía real []
                     call.respond(contactos)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Error al listar")))
                 }
             }
 
-            // GUARDAR: Inserta y confirma
+            // GUARDAR: Inserta y confirma con status 200 (OK) para evitar errores en algunas Apps
             post("/index.php") {
                 try {
                     val params = call.receive<Map<String, String>>()
                     val nom = params["nombre"] ?: ""
                     val num = params["numero"] ?: ""
                     val par = params["parentesco"] ?: ""
+
+                    logger.info("Guardando contacto: $nom, Numero: $num")
 
                     val generatedId = DatabaseFactory.dbQuery {
                         ContactosTable.insertAndGetId {
@@ -68,19 +69,22 @@ fun main() {
                         }
                     }
                     
-                    // Al guardar, confirmamos con los datos reales insertados
-                    call.respond(HttpStatusCode.Created, mapOf(
+                    // Respondemos con 200 OK y status: success (formato estándar)
+                    call.respond(HttpStatusCode.OK, mapOf(
                         "status" to "success", 
-                        "id" to generatedId.value,
-                        "nombre" to nom
+                        "message" to "Contacto guardado",
+                        "id" to generatedId.value
                     ))
                 } catch (e: Exception) {
                     logger.error("Error guardar: ${e.message}")
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error al guardar")))
+                    call.respond(HttpStatusCode.BadRequest, mapOf(
+                        "status" to "error", 
+                        "message" to (e.message ?: "Error al guardar")
+                    ))
                 }
             }
 
-            // ELIMINAR: Borra de verdad en Railway
+            // ELIMINAR
             post("/eliminar.php") {
                 try {
                     val params = call.receive<Map<String, String>>()
@@ -101,7 +105,7 @@ fun main() {
                 }
             }
 
-            // AUTH: Registro y Login (Sin cambios, ya son estables)
+            // AUTH
             post("/registro") {
                 try {
                     val params = call.receive<Map<String, String>>()
@@ -114,7 +118,7 @@ fun main() {
                             it[contraseña] = con
                         }
                     }
-                    call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
+                    call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to "Error en registro"))
                 }
