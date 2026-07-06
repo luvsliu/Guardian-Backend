@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "1.9.20"
     id("io.ktor.plugin") version "2.3.5"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
     kotlin("plugin.serialization") version "1.9.20"
 }
 
@@ -28,4 +29,8 @@ dependencies {
     implementation("com.mysql:mysql-connector-j:8.1.0")
     
     implementation("ch.qos.logback:logback-classic:1.4.11")
+}
+
+tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
+    archiveFileName.set("server.jar")
 }
