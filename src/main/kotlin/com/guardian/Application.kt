@@ -55,17 +55,30 @@ fun main() {
             }
 
             post("/eliminar.php") {
+                val logger = LoggerFactory.getLogger("Eliminar")
                 try {
                     val params = call.receive<Map<String, String>>()
-                    val idStr = params["id"] ?: throw Exception("ID no proporcionado")
-                    val idAEliminar = idStr.toIntOrNull() ?: throw Exception("ID inválido")
+                    logger.info("Intento de eliminación con parámetros: $params")
+                    
+                    // Buscamos el ID en varios formatos posibles por si la App varía
+                    val idStr = params["id"] ?: params["ID"] ?: params["contactId"] 
+                        ?: throw Exception("ID no encontrado en el JSON. Recibido: $params")
+                    
+                    val idAEliminar = idStr.toIntOrNull() 
+                        ?: throw Exception("El ID '$idStr' no es un número válido")
 
-                    DatabaseFactory.dbQuery {
+                    val rowsDeleted = DatabaseFactory.dbQuery {
                         ContactosTable.deleteWhere { ContactosTable.id eq idAEliminar }
                     }
-                    call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
+                    
+                    logger.info("Filas eliminadas: $rowsDeleted")
+                    call.respond(HttpStatusCode.OK, mapOf("status" to "success", "deletedRows" to rowsDeleted))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("status" to "error", "message" to (e.message ?: "Error al eliminar")))
+                    logger.error("Error al eliminar: ${e.message}")
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("status" to "error", "message" to (e.message ?: "Error desconocido"))
+                    )
                 }
             }
 
