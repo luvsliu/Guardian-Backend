@@ -55,9 +55,10 @@ fun main() {
             // NUEVA RUTA: Eliminar por ID
             post("/eliminar.php") {
                 try {
-                    // Recibimos el ID desde el JSON enviado por la App
-                    val params = call.receive<Map<String, Int>>()
-                    val idAEliminar = params["id"] ?: throw Exception("ID no proporcionado")
+                    // Recibimos los parámetros como String para ser más flexibles
+                    val params = call.receive<Map<String, String>>()
+                    val idString = params["id"] ?: throw Exception("ID no proporcionado")
+                    val idAEliminar = idString.toIntOrNull() ?: throw Exception("ID debe ser un número")
 
                     DatabaseFactory.dbQuery {
                         ContactosTable.deleteWhere { ContactosTable.id eq idAEliminar }
@@ -65,6 +66,7 @@ fun main() {
                     
                     call.respond(HttpStatusCode.OK, mapOf("status" to "success", "message" to "Contacto eliminado"))
                 } catch (e: Exception) {
+                    println("Error al eliminar: ${e.message}")
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("status" to "error", "message" to (e.message ?: "Unknown error"))
